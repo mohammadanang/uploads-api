@@ -7,6 +7,8 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/limiter"
+	"github.com/gofiber/fiber/v2/middleware/logger"
+	"github.com/mohammadanang/uploads-api/handler"
 )
 
 func main() {
@@ -17,25 +19,28 @@ func main() {
 		Expiration: 10 * time.Second,
 		Max:        3,
 	}))
+	app.Use(logger.New(logger.Config{
+		Format: "${time} | ${status} | ${method} | ${path} | ${latency}\n",
+	}))
 
-	app.Use(func(c *fiber.Ctx) error {
-		if c.Is("json") {
-			return c.Next()
-		}
-		return c.SendString("Only JSON allowed!")
-	})
 	app.Get("/", func(c *fiber.Ctx) error {
 		return c.SendString("Hello, World!")
 	})
-	app.Post("/upload", func(c *fiber.Ctx) error {
-		var body map[string]interface{}
-		if err := c.BodyParser(&body); err != nil {
-			return c.Status(fiber.StatusBadRequest).SendString("Invalid JSON")
+
+	apiHandler := handler.NewAPIHandler()
+	app.Post("/upload-file", apiHandler.UploadFile)
+	app.Post("/merge-chunk", apiHandler.MergeChunks)
+
+	// Define an error handler
+	app.Use(func(c *fiber.Ctx) error {
+		if err := recover(); err != nil {
+			// Handle the error and respond with an error message
+			return c.Status(500).SendString("Internal Server Error")
 		}
-		return c.JSON(body)
+
+		return c.Next()
 	})
 
-	log.Println("Server is running on http://localhost:3000")
 	// Start the server
 	log.Fatal(app.Listen(":3000"))
 }
